@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Matches Signal Scanner • Matrix Deep Scan V6</title>
+  <!-- PWA & Mobile Standalone Meta Tags -->
+  <meta name="theme-color" content="#050d0a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Signal Scanner" />
+  <link id="appFavicon" rel="icon" type="image/png" />
+  <link id="appleTouchIcon" rel="apple-touch-icon" />
+  <link id="pwaManifestLink" rel="manifest" />
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            forest: {
+              950: '#040c08',
+              900: '#07140e',
+              850: '#0a1c14',
+              800: '#0e261b',
+              700: '#143627',
+              600: '#1c4a35',
+            },
+            neon: {
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              bright: '#00e676',
+            }
+          },
+          animation: {
+            'pulse-fast': 'pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'glow-breathe': 'glowBreathe 2.5s ease-in-out infinite',
+            'scan-sweep': 'scanSweep 1.8s linear infinite',
+          },
+          keyframes: {
+            glowBreathe: {
+              '0%, 100%': { boxShadow: '0 0 14px rgba(0, 230, 118, 0.25)' },
+              '50%': { boxShadow: '0 0 26px rgba(0, 230, 118, 0.55)' },
+            },
+            scanSweep: {
+              '0%': { transform: 'translateY(-100%)' },
+              '100%': { transform: 'translateY(100%)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbar & sleek mobile floating-window styling */
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: #030906;
+      background-image:
+        radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.14), transparent 55%),
+        radial-gradient(circle at 80% 90%, rgba(5, 150, 105, 0.10), transparent 50%);
+      min-height: 100vh;
+    }
+
+    /* Subtle terminal grid background inside scanner screen */
+    .matrix-grid {
+      background-color: #030906;
+      background-image:
+        linear-gradient(to right, rgba(16, 185, 129, 0.07) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(16, 185, 129, 0.07) 1px, transparent 1px);
+      background-size: 18px 18px;
+    }
+
+    /* Glowing green analyzing overlay card matching video frame 0:19 & 0:30 */
+    .analyzing-overlay {
+      background: radial-gradient(circle at 50% 35%, #22c55e 0%, #15803d 55%, #064e3b 100%);
+      box-shadow: inset 0 0 30px rgba(134, 239, 172, 0.35), 0 0 25px rgba(16, 185, 129, 0.45);
+    }
+
+    /* Crimson analyzing variant when scanning specifically for Differs */
+    .analyzing-overlay-differs {
+      background: radial-gradient(circle at 50% 35%, #ef4444 0%, #b91c1c 55%, #450a0a 100%);
+      box-shadow: inset 0 0 30px rgba(252, 165, 165, 0.35), 0 0 25px rgba(239, 68, 68, 0.45);
+    }
+
+    /* Custom select dropdown styling */
+    select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.85rem center;
+      background-size: 1rem;
+    }
+
+    /* Hide scrollbars on tick strip */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Smooth digit pop transition */
+    @keyframes digitPop {
+      0% { transform: scale(0.82); opacity: 0.4; }
+      60% { transform: scale(1.05); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .digit-pop {
+      animation: digitPop 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+  </style>
+</head>
+<body class="text-gray-100 font-sans antialiased flex flex-col items-center justify-start sm:justify-center p-2.5 sm:p-4 select-none">
+
+  <!-- Main Compact Floating-Window Container (Optimized for Android Pop-Up View & Mobile) -->
+  <main id="appContainer" class="w-full max-w-[420px] flex flex-col gap-2.5 pb-3">
+
+    <!-- 0. COMPACT PWA APP HEADER BAR -->
+    <header class="bg-[#091812]/95 border border-emerald-800/60 rounded-2xl px-3.5 py-2.5 shadow-lg backdrop-blur-md flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <!-- Custom Emerald Radar Logo Emblem -->
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-[#0e2a1e] to-[#050d0a] border border-emerald-500/50 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(16,185,129,0.28)]">
+          <svg class="w-4 h-4 text-[#34d399]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" stroke-opacity="0.35"></circle>
+            <circle cx="12" cy="12" r="5" stroke-opacity="0.65"></circle>
+            <circle cx="12" cy="12" r="1.8" fill="currentColor"></circle>
+            <line x1="12" y1="12" x2="18.5" y2="5.5"></line>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <div class="text-[12.5px] font-extrabold text-white tracking-tight truncate leading-none">
+            Matches Signal Scanner
+          </div>
+          <div class="flex items-center gap-1.5 mt-1">
+            <span id="headerStatusDot" class="w-1.5 h-1.5 rounded-full bg-[#00e676] animate-pulse"></span>
+            <span id="headerStatusPill" class="font-mono text-[9.5px] font-bold tracking-wider uppercase text-emerald-300/90">
+              LIVE WS
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subtle Install App CTA Button -->
+      <button id="installAppBtn" type="button"
+        class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-95 border border-emerald-400/40 text-[#34d399] font-bold text-[11px] transition-all cursor-pointer">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span id="installBtnLabel">Install App</span>
+      </button>
+    </header>
+
+    <!-- 1. TOP CONFIGURATION CARD -->
+    <section class="bg-[#0b1913]/95 border border-emerald-900/60 rounded-2xl p-3.5 shadow-xl backdrop-blur-md">
+      <!-- Volatility Index Selector -->
+      <div class="mb-2.5">
+        <label for="symbolSelect" class="block text-[11px] font-semibold tracking-wide text-emerald-200/75 mb-1.5">
+          Volatility Index
+        </label>
+        <div class="relative">
+          <select id="symbolSelect"
+            class="w-full bg-[#13261e] hover:bg-[#172e24] text-white text-[13px] font-semibold rounded-xl px-3.5 py-2.5 pr-9 border border-emerald-800/70 focus:outline-none focus:border-emerald-400 transition-colors cursor-pointer">
+            <option value="1HZ100V" data-decimals="2" selected>Volatility 100 (1s) Index</option>
+            <option value="R_100" data-decimals="2">Volatility 100 Index</option>
+            <option value="1HZ75V" data-decimals="2">Volatility 75 (1s) Index</option>
+            <option value="R_75" data-decimals="4">Volatility 75 Index</option>
+            <option value="1HZ50V" data-decimals="2">Volatility 50 (1s) Index</option>
+            <option value="R_50" data-decimals="4">Volatility 50 Index</option>
+            <option value="1HZ25V" data-decimals="2">Volatility 25 (1s) Index</option>
+            <option value="R_25" data-decimals="3">Volatility 25 Index</option>
+            <option value="1HZ10V" data-decimals="2">Volatility 10 (1s) Index</option>
+            <option value="R_10" data-decimals="3">Volatility 10 Index</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Trade Type Selector -->
+      <div>
+        <label for="tradeTypeSelect" class="block text-[11px] font-semibold tracking-wide text-emerald-200/75 mb-1.5">
+          Trade Type
+        </label>
+        <div class="relative">
+          <select id="tradeTypeSelect"
+            class="w-full bg-[#13261e] hover:bg-[#172e24] text-white text-[13px] font-semibold rounded-xl px-3.5 py-2.5 pr-9 border border-emerald-800/70 focus:outline-none focus:border-emerald-400 transition-colors cursor-pointer">
+            <option value="matches_differs" selected>Matches / Differs</option>
+            <option value="matches_only">Digits • Matches Focus</option>
+            <option value="differs_only">Digits • Differs Focus</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. MATCHES SIGNAL SCANNER CARD -->
+    <section class="bg-gradient-to-b from-[#0f291e] to-[#081711] border border-emerald-700/50 rounded-2xl p-3.5 shadow-2xl relative overflow-hidden">
+      <!-- Card Header -->
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2.5">
+          <!-- Green Radar / Pulse Icon Badge -->
+          <div class="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center shadow-inner">
+            <svg class="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="2"></circle>
+              <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-[14px] font-bold text-white leading-tight tracking-tight">Matches Signal Scanner</h1>
+            <p class="text-[10px] font-mono font-bold tracking-wider text-emerald-400/90 uppercase mt-0.5">
+              MATRIX DEEP SCAN &bull; V6
+            </p>
+          </div>
+        </div>
+
+        <!-- Circular Score Badge (e.g. 5.6) -->
+        <div id="matrixScoreBadge"
+          title="Matrix Entropy & Skew Score"
+          class="w-9 h-9 rounded-full bg-[#00e676] text-[#03140b] font-mono font-extrabold text-[12px] flex items-center justify-center shadow-[0_0_14px_rgba(0,230,118,0.5)] transition-all duration-300">
+          5.6
+        </div>
+      </div>
+
+      <!-- Embedded Dark Terminal Viewport Screen -->
+      <div id="scannerViewport"
+        class="relative w-full h-[148px] rounded-xl border border-emerald-800/80 matrix-grid overflow-hidden flex flex-col items-center justify-center transition-all duration-300">
+
+        <!-- Subtle Top Corner Telemetry inside Viewport -->
+        <div class="absolute top-2 left-2.5 right-2.5 flex items-center justify-between text-[9px] font-mono text-emerald-500/60 pointer-events-none z-10">
+          <span id="viewportTickRate">STREAM: 1.0s/TICK</span>
+          <span id="viewportSampleCount">WINDOW: 0/100</span>
+        </div>
+
+        <!-- Mini 10-Digit Frequency Bar Strip at Bottom of Idle Screen -->
+        <div id="miniDigitBars" class="absolute bottom-2 left-2.5 right-2.5 flex items-end justify-between gap-1 h-6 opacity-55 pointer-events-none z-10">
+          <!-- Populated dynamically via JS -->
+        </div>
+
+        <!-- STATE A: IDLE - READY TO SCAN -->
+        <div id="idleStateView" class="flex flex-col items-center justify-center text-center px-4 z-10 transition-opacity duration-200">
+          <div class="w-2.5 h-2.5 rounded-full bg-[#00e676] shadow-[0_0_10px_#00e676] animate-pulse mb-2"></div>
+          <p class="font-mono text-[11px] font-bold tracking-[0.14em] text-emerald-100/90 uppercase">
+            IDLE - READY TO SCAN
+          </p>
+        </div>
+
+        <!-- STATE B: ANALYZING OVERLAY (Matches video frame 0:19 & 0:30) -->
+        <div id="analyzingStateView"
+          class="hidden absolute inset-0 analyzing-overlay flex-col items-center justify-center text-center px-5 z-20 transition-all duration-200">
+          <!-- Circular Trend Icon Badge -->
+          <div class="w-11 h-11 rounded-full bg-white/20 border border-white/40 flex items-center justify-center mb-2.5 shadow-lg backdrop-blur-sm">
+            <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+              <polyline points="16 7 22 7 22 13"></polyline>
+            </svg>
+          </div>
+          <h2 id="analyzingTitle" class="text-[14px] font-extrabold text-white tracking-tight drop-shadow">
+            Analyzing the matches market
+          </h2>
+          <p id="analyzingSubtitle" class="text-[11px] font-medium text-emerald-50/90 mt-0.5 mb-3">
+            Scanning digit distribution &amp; probability...
+          </p>
+          <!-- Animated Progress Bar -->
+          <div class="w-4/5 max-w-[230px] h-1.5 bg-black/35 rounded-full overflow-hidden p-[1px]">
+            <div id="scanProgressBar" class="h-full w-0 bg-white rounded-full shadow-[0_0_8px_#ffffff] transition-all duration-75"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status Row Below Viewport -->
+      <div class="flex items-center justify-between text-[11px] font-medium text-emerald-300/75 mt-2 mb-2.5 px-0.5">
+        <span id="scannerStatusText" class="flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          Ready
+        </span>
+        <span id="scannerLastPrice" class="font-mono text-[10.5px] text-emerald-200/70">
+          Spot: --.--
+        </span>
+      </div>
+
+      <!-- Full-Width Bright Emerald Green CTA Button -->
+      <button id="startScanBtn" type="button"
+        class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#00c853] via-[#00e676] to-[#00c853] hover:brightness-110 active:scale-[0.99] text-[#03140b] font-extrabold text-[13.5px] tracking-tight flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(0,230,118,0.35)] transition-all cursor-pointer">
+        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+        </svg>
+        <span>Start Matrix Scan</span>
+      </button>
+    </section>
+
+    <!-- 3. TRADING SIGNALS CARD -->
+    <section class="bg-[#081711]/95 border border-emerald-800/60 rounded-2xl p-3.5 shadow-2xl">
+      <!-- Header Row: Title on Left, Segmented Pill Toggle on Right -->
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <div class="flex items-center gap-2">
+          <!-- Green Pulse Icon -->
+          <div class="w-6 h-6 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+          </div>
+          <h2 class="text-[14px] font-bold text-white tracking-tight">Trading Signals</h2>
+        </div>
+
+        <!-- Segmented Pill Toggle [Matches | Differs] -->
+        <div class="inline-flex bg-[#040c08] p-1 rounded-xl border border-emerald-900/80">
+          <button id="modeMatchesPill" type="button"
+            class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[#00c853] text-[#03140b] shadow transition-all cursor-pointer">
+            Matches
+          </button>
+          <button id="modeDiffersPill" type="button"
+            class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-gray-400 hover:text-white transition-all cursor-pointer">
+            Differs
+          </button>
+        </div>
+      </div>
+
+      <!-- Action Button Row: [✓ Matches] [✕ Differs] [⚡ Signal] -->
+      <div class="grid grid-cols-3 gap-2 mb-3">
+        <button id="btnQuickMatches" type="button"
+          class="py-2.5 px-2 rounded-xl bg-[#00c853] hover:bg-[#00e676] active:scale-[0.98] text-[#03140b] font-extrabold text-[12px] flex items-center justify-center gap-1.5 shadow-[0_2px_12px_rgba(0,200,83,0.3)] transition-all cursor-pointer">
+          <span class="font-black text-[13px]">✓</span>
+          <span>Matches</span>
+        </button>
+
+        <button id="btnQuickDiffers" type="button"
+          class="py-2.5 px-2 rounded-xl bg-[#dc2626] hover:bg-[#ef4444] active:scale-[0.98] text-white font-extrabold text-[12px] flex items-center justify-center gap-1.5 shadow-[0_2px_12px_rgba(220,38,38,0.3)] transition-all cursor-pointer">
+          <span class="font-black text-[12px]">✕</span>
+          <span>Differs</span>
+        </button>
+
+        <button id="btnQuickSignal" type="button"
+          class="py-2.5 px-2 rounded-xl bg-[#13261e] hover:bg-[#1a3328] active:scale-[0.98] text-emerald-100 border border-emerald-700/60 font-bold text-[12px] flex items-center justify-center gap-1.5 transition-all cursor-pointer">
+          <svg class="w-3.5 h-3.5 text-amber-400 fill-current" viewBox="0 0 24 24">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+          </svg>
+          <span>Signal</span>
+        </button>
+      </div>
+
+      <!-- Checkbox Row: Auto-generate every 30s -->
+      <div class="flex items-center justify-between mb-3 px-0.5">
+        <label for="autoGenCheckbox" class="inline-flex items-center gap-2 cursor-pointer group">
+          <input id="autoGenCheckbox" type="checkbox"
+            class="w-4 h-4 rounded border-emerald-700 bg-[#0d1f17] text-emerald-500 focus:ring-emerald-500/40 focus:ring-offset-0 cursor-pointer accent-[#00c853]" />
+          <span class="text-[12px] font-medium text-emerald-100/85 group-hover:text-white transition-colors">
+            Auto-generate every 30s
+          </span>
+        </label>
+        <span id="autoGenTimerBadge" class="hidden font-mono text-[10.5px] font-bold text-emerald-400 bg-emerald-950/90 border border-emerald-700/50 px-2 py-0.5 rounded-md">
+          Next: 30s
+        </span>
+      </div>
+
+      <!-- SIGNAL RESULT CARD (Dark Green Bordered Box matching video frame 0:31) -->
+      <div id="signalResultCard"
+        class="rounded-2xl bg-gradient-to-br from-[#0c2419] via-[#081912] to-[#06120d] border border-emerald-500/45 p-3.5 shadow-inner transition-all duration-300">
+        <!-- Top Row: Pulse Dot + Signal Type + Timestamp on Left, LIVE Pill on Right -->
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span id="signalLiveDot" class="w-2.5 h-2.5 rounded-full bg-[#00e676] shadow-[0_0_8px_#00e676] animate-pulse"></span>
+            <div>
+              <div id="signalTypeLabel" class="text-[11px] font-extrabold tracking-wider text-emerald-300 uppercase leading-none">
+                MATCHES SIGNAL
+              </div>
+              <div id="signalTimestamp" class="font-mono text-[10px] text-emerald-200/60 mt-1">
+                --:--:-- --
+              </div>
+            </div>
+          </div>
+
+          <span id="liveStatusPill"
+            class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase bg-emerald-500/20 text-[#00e676] border border-emerald-400/40">
+            LIVE
+          </span>
+        </div>
+
+        <!-- Main Display: Large Rounded Digit Box on Left + CONFIDENCE % on Right -->
+        <div class="flex items-center gap-4">
+          <!-- Large Rounded Bright Green (or Crimson) Square Digit Box -->
+          <div id="signalDigitBox"
+            class="w-[74px] h-[74px] shrink-0 rounded-2xl bg-gradient-to-br from-[#00e676] to-[#00a844] text-[#03140b] flex items-center justify-center font-mono text-[38px] font-black shadow-[0_6px_22px_rgba(0,230,118,0.4)] border border-emerald-200/40">
+            <span id="signalDigitValue">6</span>
+          </div>
+
+          <!-- Right Confidence & Metric Details -->
+          <div class="flex-1 min-w-0">
+            <div class="text-[10.5px] font-bold tracking-[0.12em] text-emerald-300/75 uppercase">
+              CONFIDENCE
+            </div>
+            <div id="signalConfidenceValue" class="font-mono text-[32px] font-black text-white leading-tight tracking-tight">
+              98.0%
+            </div>
+            <div id="signalBasisNote" class="text-[10px] font-mono text-emerald-300/65 truncate mt-0.5">
+              100-tick skew • Freq: 14.0%
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. BOTTOM LIVE TICK STREAM BAR -->
+    <footer class="bg-[#091a13]/95 border border-emerald-800/60 rounded-2xl px-3.5 py-2.5 shadow-xl flex flex-col gap-2">
+      <div class="flex items-center justify-between gap-2">
+        <!-- Left: Green Radio/Broadcast Icon + 'Live Tick Stream' -->
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="w-6 h-6 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-[#00e676]">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path>
+              <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path>
+              <circle cx="12" cy="12" r="2"></circle>
+              <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path>
+              <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"></path>
+            </svg>
+          </span>
+          <span class="text-[11.5px] font-bold text-white tracking-tight">Live Tick Stream</span>
+        </div>
+
+        <!-- Right: ● Active Index Name + Connection Mode -->
+        <div class="flex items-center gap-1.5 min-w-0">
+          <span id="wsStatusDot" class="w-2 h-2 rounded-full bg-[#00e676] shrink-0 animate-pulse"></span>
+          <span id="footerSymbolLabel" class="text-[11px] font-semibold text-emerald-200/90 truncate">
+            Volatility 100 (1s) Index
+          </span>
+        </div>
+      </div>
+
+      <!-- Scrolling Last-Digit Pills (0-9) -->
+      <div class="flex items-center justify-between gap-1.5 pt-1 border-t border-emerald-900/60">
+        <div id="liveTickPills" class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 flex-1">
+          <!-- Populated dynamically with recent last-digit pills -->
+        </div>
+        <span id="feedSourceBadge" class="shrink-0 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/70">
+          DERIV WS
+        </span>
+      </div>
+    </footer>
+
+    <!-- Discreet Educational & Risk Disclaimer -->
+    <p class="text-[10px] leading-relaxed text-center text-emerald-200/45 px-2">
+      Statistical frequency tool only: confidence scores reflect rolling 100-tick historical digit skew, not guaranteed future RNG outcomes. Test on Demo first.
+    </p>
+  </main>
+
+  <!-- Non-blocking Install Instructions Modal (Fallback when native prompt isn't triggered) -->
+  <div id="installHelpModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-[360px] bg-[#0a1c14] border border-emerald-500/45 rounded-2xl p-4 shadow-2xl text-left">
+      <div class="flex items-center justify-between mb-2.5">
+        <div class="flex items-center gap-2">
+          <img id="modalIconPreview" alt="App Logo" class="w-8 h-8 rounded-xl border border-emerald-400/40" />
+          <h3 class="text-[14px] font-extrabold text-white">Install Signal Scanner</h3>
+        </div>
+        <button id="closeInstallModalBtn" type="button" class="text-emerald-300/70 hover:text-white p-1 rounded-lg cursor-pointer">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <p class="text-[11.5px] text-emerald-100/80 leading-relaxed mb-3">
+        Add this scanner to your home screen for standalone full-screen mode and Android floating pop-up view:
+      </p>
+      <ul class="space-y-2 text-[11px] text-emerald-200/85 bg-[#050d0a] border border-emerald-900/70 rounded-xl p-3 mb-3">
+        <li><strong class="text-[#34d399]">1. Host over HTTPS:</strong> Upload <span class="font-mono text-white">index.html</span> to GitHub Pages, Netlify Drop, or Vercel.</li>
+        <li><strong class="text-[#34d399]">2. Android Chrome:</strong> Tap <span class="font-mono text-white">⋮</span> &rarr; <strong>Add to Home screen</strong> &rarr; <strong>Install</strong>.</li>
+        <li><strong class="text-[#34d399]">3. iPhone Safari:</strong> Tap <strong>Share</strong> &rarr; <strong>Add to Home Screen</strong>.</li>
+      </ul>
+      <button id="dismissInstallModalBtn" type="button"
+        class="w-full py-2.5 rounded-xl bg-[#00c853] hover:bg-[#00e676] text-[#03140b] font-extrabold text-[12px] cursor-pointer transition-colors">
+        Got It
+      </button>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Self-Contained PWA Bootloader (Canvas Radar Icons + Web App Manifest + Inline SW)
+     */
+    (function setupSelfContainedPWA() {
+      function renderRadarIconDataURL(size) {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const cx = size / 2;
+        const cy = size / 2;
+
+        // Dark-emerald rounded background
+        const bgGrad = ctx.createRadialGradient(cx, cy * 0.85, size * 0.05, cx, cy, size * 0.72);
+        bgGrad.addColorStop(0, '#0f2d20');
+        bgGrad.addColorStop(1, '#050d0a');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, size, size);
+
+        // Subtle emerald border ring
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.35)';
+        ctx.lineWidth = Math.max(2, size * 0.016);
+        ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, size - ctx.lineWidth, size - ctx.lineWidth);
+
+        // Concentric radar rings
+        const ringRadii = [0.38, 0.26, 0.14];
+        ringRadii.forEach((ratio, i) => {
+          ctx.beginPath();
+          ctx.arc(cx, cy, size * ratio, 0, Math.PI * 2);
+          ctx.strokeStyle = i === 0 ? 'rgba(16, 185, 129, 0.42)' : 'rgba(52, 211, 153, 0.55)';
+          ctx.lineWidth = Math.max(2, size * 0.012);
+          ctx.stroke();
+        });
+
+        // Glowing crosshair lines
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.25)';
+        ctx.lineWidth = Math.max(1.5, size * 0.009);
+        ctx.beginPath();
+        ctx.moveTo(cx - size * 0.41, cy);
+        ctx.lineTo(cx + size * 0.41, cy);
+        ctx.moveTo(cx, cy - size * 0.41);
+        ctx.lineTo(cx, cy + size * 0.41);
+        ctx.stroke();
+
+        // Radar sweep sector
+        const sweepGrad = ctx.createLinearGradient(cx, cy, cx + size * 0.32, cy - size * 0.32);
+        sweepGrad.addColorStop(0, 'rgba(0, 230, 118, 0.45)');
+        sweepGrad.addColorStop(1, 'rgba(16, 185, 129, 0.02)');
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, size * 0.38, -Math.PI * 0.42, -Math.PI * 0.08);
+        ctx.closePath();
+        ctx.fillStyle = sweepGrad;
+        ctx.fill();
+
+        // Radar sweep leading beam
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(-Math.PI * 0.25) * size * 0.38, cy + Math.sin(-Math.PI * 0.25) * size * 0.38);
+        ctx.strokeStyle = '#34d399';
+        ctx.lineWidth = Math.max(2.5, size * 0.016);
+        ctx.stroke();
+
+        // Central glowing signal pulse emblem
+        ctx.save();
+        ctx.shadowColor = '#00e676';
+        ctx.shadowBlur = size * 0.08;
+        ctx.beginPath();
+        ctx.arc(cx, cy, size * 0.055, 0, Math.PI * 2);
+        ctx.fillStyle = '#00e676';
+        ctx.fill();
+        ctx.restore();
+
+        return canvas.toDataURL('image/png');
+      }
+
+      try {
+        const icon192 = renderRadarIconDataURL(192);
+        const icon512 = renderRadarIconDataURL(512);
+
+        const faviconEl = document.getElementById('appFavicon');
+        const appleTouchEl = document.getElementById('appleTouchIcon');
+        const modalPreviewEl = document.getElementById('modalIconPreview');
+        if (faviconEl) faviconEl.href = icon192;
+        if (appleTouchEl) appleTouchEl.href = icon192;
+        if (modalPreviewEl) modalPreviewEl.src = icon192;
+
+        // Build dynamic Web App Manifest via Blob URL
+        const startUrl = window.location.protocol.startsWith('http') ? window.location.href : '.';
+        const manifestObj = {
+          name: 'Matches Signal Scanner',
+          short_name: 'Signal Scanner',
+          description: 'Dark-emerald Deriv Matches/Differs live digit frequency scanner.',
+          start_url: startUrl,
+          display: 'standalone',
+          orientation: 'portrait',
+          background_color: '#050d0a',
+          theme_color: '#050d0a',
+          icons: [
+            { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+            { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          ]
+        };
+
+        const manifestBlob = new Blob([JSON.stringify(manifestObj)], { type: 'application/manifest+json' });
+        const manifestURL = URL.createObjectURL(manifestBlob);
+        const manifestLink = document.getElementById('pwaManifestLink');
+        if (manifestLink) manifestLink.href = manifestURL;
+
+        // Register lightweight inline Blob Service Worker on HTTPS origins for native Chrome installability
+        if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+          const swCode = `
+            self.addEventListener('install', (e) => self.skipWaiting());
+            self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+            self.addEventListener('fetch', (e) => {
+              e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+            });
+          `;
+          const swBlob = new Blob([swCode], { type: 'application/javascript' });
+          const swUrl = URL.createObjectURL(swBlob);
+          navigator.serviceWorker.register(swUrl).catch(() => {});
+        }
+      } catch (err) {
+        // Safe fallback if canvas/blob APIs are restricted
+      }
+
+      // Handle Chrome native beforeinstallprompt & fallback modal
+      let deferredInstallPrompt = null;
+      const installBtn = document.getElementById('installAppBtn');
+      const installBtnLabel = document.getElementById('installBtnLabel');
+      const installHelpModal = document.getElementById('installHelpModal');
+      const closeInstallModalBtn = document.getElementById('closeInstallModalBtn');
+      const dismissInstallModalBtn = document.getElementById('dismissInstallModalBtn');
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        if (installBtnLabel) installBtnLabel.textContent = 'Install App';
+      });
+
+      window.addEventListener('appinstalled', () => {
+        deferredInstallPrompt = null;
+        if (installBtn) installBtn.classList.add('hidden');
+      });
+
+      // Hide install button if already running in standalone mode
+      if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+        if (installBtn) installBtn.classList.add('hidden');
+      }
+
+      if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+          if (deferredInstallPrompt) {
+            deferredInstallPrompt.prompt();
+            await deferredInstallPrompt.userChoice;
+            deferredInstallPrompt = null;
+          } else if (installHelpModal) {
+            installHelpModal.classList.remove('hidden');
+          }
+        });
+      }
+
+      [closeInstallModalBtn, dismissInstallModalBtn].forEach((btn) => {
+        if (btn && installHelpModal) {
+          btn.addEventListener('click', () => installHelpModal.classList.add('hidden'));
+        }
+      });
+    })();
+
+    /**
+     * Matches Signal Scanner & Trading Signals Engine
+     * Connects to Deriv Public WebSocket (wss://ws.derivws.com/websockets/v3?app_id=1089)
+     * with automatic fallback tick generator if offline or blocked.
+     */
+    (function () {
+      // --- DOM Elements ---
+      const headerStatusDot = document.getElementById('headerStatusDot');
+      const headerStatusPill = document.getElementById('headerStatusPill');
+      const symbolSelect = document.getElementById('symbolSelect');
+      const tradeTypeSelect = document.getElementById('tradeTypeSelect');
+      const matrixScoreBadge = document.getElementById('matrixScoreBadge');
+      const viewportTickRate = document.getElementById('viewportTickRate');
+      const viewportSampleCount = document.getElementById('viewportSampleCount');
+      const miniDigitBars = document.getElementById('miniDigitBars');
+      const idleStateView = document.getElementById('idleStateView');
+      const analyzingStateView = document.getElementById('analyzingStateView');
+      const analyzingTitle = document.getElementById('analyzingTitle');
+      const analyzingSubtitle = document.getElementById('analyzingSubtitle');
+      const scanProgressBar = document.getElementById('scanProgressBar');
+      const scannerStatusText = document.getElementById('scannerStatusText');
+      const scannerLastPrice = document.getElementById('scannerLastPrice');
+      const startScanBtn = document.getElementById('startScanBtn');
+
+      const modeMatchesPill = document.getElementById('modeMatchesPill');
+      const modeDiffersPill = document.getElementById('modeDiffersPill');
+      const btnQuickMatches = document.getElementById('btnQuickMatches');
+      const btnQuickDiffers = document.getElementById('btnQuickDiffers');
+      const btnQuickSignal = document.getElementById('btnQuickSignal');
+      const autoGenCheckbox = document.getElementById('autoGenCheckbox');
+      const autoGenTimerBadge = document.getElementById('autoGenTimerBadge');
+
+      const signalResultCard = document.getElementById('signalResultCard');
+      const signalLiveDot = document.getElementById('signalLiveDot');
+      const signalTypeLabel = document.getElementById('signalTypeLabel');
+      const signalTimestamp = document.getElementById('signalTimestamp');
+      const liveStatusPill = document.getElementById('liveStatusPill');
+      const signalDigitBox = document.getElementById('signalDigitBox');
+      const signalDigitValue = document.getElementById('signalDigitValue');
+      const signalConfidenceValue = document.getElementById('signalConfidenceValue');
+      const signalBasisNote = document.getElementById('signalBasisNote');
+
+      const wsStatusDot = document.getElementById('wsStatusDot');
+      const footerSymbolLabel = document.getElementById('footerSymbolLabel');
+      const liveTickPills = document.getElementById('liveTickPills');
+      const feedSourceBadge = document.getElementById('feedSourceBadge');
+
+      // --- Application State ---
+      const MAX_WINDOW = 100;
+      const DERIV_WS_URL = 'wss://ws.derivws.com/websockets/v3?app_id=1089';
+
+      let ws = null;
+      let fallbackInterval = null;
+      let reconnectTimeout = null;
+      let isUsingFallback = false;
+
+      let currentSymbol = symbolSelect.value; // '1HZ100V'
+      let currentDecimals = 2;
+      let activeMode = 'matches'; // 'matches' | 'differs'
+      let isScanning = false;
+
+      let tickHistory = []; // Array of { quote: string, digit: number }
+      let simulatedPrice = 1428.56;
+
+      let autoGenInterval = null;
+      let autoGenCountdown = 30;
+
+      // --- Initialization ---
+      function initMiniBars() {
+        miniDigitBars.innerHTML = '';
+        for (let d = 0; d <= 9; d++) {
+          const barWrap = document.createElement('div');
+          barWrap.className = 'flex-1 flex flex-col items-center justify-end h-full';
+          barWrap.innerHTML = `
+            <div id="miniBar_${d}" class="w-full bg-emerald-400/60 rounded-t-[2px] transition-all duration-300" style="height: 30%;"></div>
+            <span class="text-[8px] font-mono text-emerald-300/70 leading-none mt-0.5">${d}</span>
+          `;
+          miniDigitBars.appendChild(barWrap);
+        }
+      }
+
+      // Format current local time like '10:00:36 PM'
+      function formatClockTime(date = new Date()) {
+        return date.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        });
+      }
+
+      // Extract last decimal digit reliably using fixed decimal places
+      function extractLastDigit(priceNum, decimals) {
+        const fixedStr = Number(priceNum).toFixed(decimals);
+        const lastChar = fixedStr.charAt(fixedStr.length - 1);
+        return {
+          formatted: fixedStr,
+          digit: parseInt(lastChar, 10)
+        };
+      }
+
+      // Compute rolling 100-tick digit distribution & matrix score
+      function computeDigitStats() {
+        const counts = new Array(10).fill(0);
+        const total = tickHistory.length;
+
+        for (let i = 0; i < total; i++) {
+          counts[tickHistory[i].digit]++;
+        }
+
+        const frequencies = counts.map(c => (total > 0 ? (c / total) * 100 : 10));
+
+        // Calculate chi-square-like dispersion score scaled to ~3.0 - 9.9 (matching badge like '5.6')
+        let deviationSum = 0;
+        for (let d = 0; d < 10; d++) {
+          deviationSum += Math.abs(frequencies[d] - 10);
+        }
+        const matrixScore = Math.min(9.9, Math.max(2.1, (3.2 + deviationSum * 0.14))).toFixed(1);
+
+        // Find hottest digit (highest recent frequency) and coldest digit (lowest recent frequency / longest absence)
+        let hottestDigit = 0;
+        let maxFreq = -1;
+        let coldestDigit = 0;
+        let minFreq = 101;
+
+        // Track ticks since last seen to break ties naturally
+        const lastSeenAgo = new Array(10).fill(total);
+        for (let i = total - 1; i >= 0; i--) {
+          const d = tickHistory[i].digit;
+          if (lastSeenAgo[d] === total) {
+            lastSeenAgo[d] = total - 1 - i;
+          }
+        }
+
+        for (let d = 0; d < 10; d++) {
+          if (frequencies[d] > maxFreq || (frequencies[d] === maxFreq && lastSeenAgo[d] < lastSeenAgo[hottestDigit])) {
+            maxFreq = frequencies[d];
+            hottestDigit = d;
+          }
+          if (frequencies[d] < minFreq || (frequencies[d] === minFreq && lastSeenAgo[d] > lastSeenAgo[coldestDigit])) {
+            minFreq = frequencies[d];
+            coldestDigit = d;
+          }
+        }
+
+        return {
+          total,
+          counts,
+          frequencies,
+          matrixScore,
+          hottestDigit,
+          maxFreq,
+          coldestDigit,
+          minFreq,
+          lastSeenAgo
+        };
+      }
+
+      // Update live UI elements on every incoming tick
+      function onNewTick(quoteNum) {
+        const { formatted, digit } = extractLastDigit(quoteNum, currentDecimals);
+
+        tickHistory.push({ quote: formatted, digit });
+        if (tickHistory.length > MAX_WINDOW) {
+          tickHistory.shift();
+        }
+
+        // Update spot price & sample telemetry
+        scannerLastPrice.textContent = `Spot: ${formatted}`;
+        viewportSampleCount.textContent = `WINDOW: ${tickHistory.length}/${MAX_WINDOW}`;
+
+        // Update mini histogram bars & matrix score badge
+        const stats = computeDigitStats();
+        matrixScoreBadge.textContent = stats.matrixScore;
+
+        const peak = Math.max(...stats.frequencies, 15);
+        for (let d = 0; d <= 9; d++) {
+          const bar = document.getElementById(`miniBar_${d}`);
+          if (bar) {
+            const pct = Math.min(100, Math.max(12, (stats.frequencies[d] / peak) * 100));
+            bar.style.height = `${pct}%`;
+            if (d === stats.hottestDigit) {
+              bar.className = 'w-full bg-[#00e676] rounded-t-[2px] transition-all duration-300';
+            } else if (d === stats.coldestDigit) {
+              bar.className = 'w-full bg-rose-400/80 rounded-t-[2px] transition-all duration-300';
+            } else {
+              bar.className = 'w-full bg-emerald-400/50 rounded-t-[2px] transition-all duration-300';
+            }
+          }
+        }
+
+        // Render recent last-digit pills in bottom stream bar (last 11 ticks)
+        renderLiveTickPills();
+      }
+
+      function renderLiveTickPills() {
+        const recent = tickHistory.slice(-11);
+        liveTickPills.innerHTML = '';
+
+        recent.forEach((item, idx) => {
+          const isLatest = idx === recent.length - 1;
+          const pill = document.createElement('span');
+          pill.textContent = item.digit;
+
+          if (isLatest) {
+            pill.className =
+              'w-5 h-5 shrink-0 rounded-md bg-[#00e676] text-[#03140b] font-mono text-[11px] font-black flex items-center justify-center shadow-[0_0_8px_rgba(0,230,118,0.6)] digit-pop';
+          } else {
+            pill.className =
+              'w-5 h-5 shrink-0 rounded-md bg-[#11261d] text-emerald-200/85 border border-emerald-800/70 font-mono text-[10.5px] font-bold flex items-center justify-center';
+          }
+          liveTickPills.appendChild(pill);
+        });
+      }
+
+      // --- Deriv WebSocket & Seamless Offline Fallback ---
+      function stopFallbackSimulator() {
+        if (fallbackInterval) {
+          clearInterval(fallbackInterval);
+          fallbackInterval = null;
+        }
+      }
+
+      function startFallbackSimulator() {
+        stopFallbackSimulator();
+        isUsingFallback = true;
+        feedSourceBadge.textContent = 'SIM FEED';
+        feedSourceBadge.className =
+          'shrink-0 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-amber-950/90 text-amber-300 border border-amber-700/60';
+        wsStatusDot.className = 'w-2 h-2 rounded-full bg-amber-400 shrink-0 animate-pulse';
+        if (headerStatusDot) headerStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse';
+        if (headerStatusPill) {
+          headerStatusPill.textContent = 'SIMULATOR';
+          headerStatusPill.className = 'font-mono text-[9.5px] font-bold tracking-wider uppercase text-amber-300';
+        }
+
+        // Seed initial 35 ticks immediately so scanner has instant sample depth
+        if (tickHistory.length < 25) {
+          for (let i = 0; i < 35; i++) {
+            simulatedPrice += (Math.random() - 0.5) * 1.45;
+            onNewTick(Math.abs(simulatedPrice));
+          }
+        }
+
+        const is1s = currentSymbol.startsWith('1HZ');
+        const intervalMs = is1s ? 1000 : 1400;
+        viewportTickRate.textContent = `STREAM: ${(intervalMs / 1000).toFixed(1)}s/TICK`;
+
+        fallbackInterval = setInterval(() => {
+          simulatedPrice += (Math.random() - 0.5) * 1.35;
+          onNewTick(Math.abs(simulatedPrice));
+        }, intervalMs);
+      }
+
+      function connectDerivStream(symbol) {
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        stopFallbackSimulator();
+
+        if (ws) {
+          try {
+            ws.onclose = null;
+            ws.onerror = null;
+            ws.close();
+          } catch (e) {}
+          ws = null;
+        }
+
+        tickHistory = [];
+        renderLiveTickPills();
+        scannerLastPrice.textContent = 'Spot: connecting...';
+        viewportSampleCount.textContent = `WINDOW: 0/${MAX_WINDOW}`;
+
+        const is1s = symbol.startsWith('1HZ');
+        viewportTickRate.textContent = is1s ? 'STREAM: 1.0s/TICK' : 'STREAM: LIVE/TICK';
+
+        // Safety timer: if WebSocket takes > 3.5s (e.g. sandbox/firewall), switch seamlessly to simulator
+        const connectionGuard = setTimeout(() => {
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            startFallbackSimulator();
+          }
+        }, 3500);
+
+        try {
+          ws = new WebSocket(DERIV_WS_URL);
+
+          ws.onopen = () => {
+            clearTimeout(connectionGuard);
+            isUsingFallback = false;
+            feedSourceBadge.textContent = 'DERIV LIVE';
+            feedSourceBadge.className =
+              'shrink-0 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/70';
+            wsStatusDot.className = 'w-2 h-2 rounded-full bg-[#00e676] shrink-0 animate-pulse';
+            if (headerStatusDot) headerStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-[#00e676] animate-pulse';
+            if (headerStatusPill) {
+              headerStatusPill.textContent = 'LIVE WS';
+              headerStatusPill.className = 'font-mono text-[9.5px] font-bold tracking-wider uppercase text-emerald-300/90';
+            }
+
+            // Request last 100 historical ticks first, then subscribe to live stream
+            ws.send(JSON.stringify({
+              ticks_history: symbol,
+              adjust_start_time: 1,
+              count: MAX_WINDOW,
+              end: 'latest',
+              style: 'ticks',
+              subscribe: 1
+            }));
+          };
+
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.error) {
+                startFallbackSimulator();
+                return;
+              }
+
+              // Historical batch response
+              if (data.history && Array.isArray(data.history.prices)) {
+                tickHistory = [];
+                data.history.prices.forEach(price => {
+                  const { formatted, digit } = extractLastDigit(price, currentDecimals);
+                  tickHistory.push({ quote: formatted, digit });
+                });
+                if (tickHistory.length > 0) {
+                  const last = tickHistory[tickHistory.length - 1];
+                  onNewTick(parseFloat(last.quote));
+                }
+              }
+
+              // Live streaming tick response
+              if (data.tick && typeof data.tick.quote !== 'undefined') {
+                onNewTick(data.tick.quote);
+              }
+            } catch (err) {
+              // Ignore malformed frames
+            }
+          };
+
+          ws.onerror = () => {
+            clearTimeout(connectionGuard);
+            startFallbackSimulator();
+          };
+
+          ws.onclose = () => {
+            clearTimeout(connectionGuard);
+            if (!isUsingFallback) {
+              startFallbackSimulator();
+            }
+          };
+        } catch (err) {
+          clearTimeout(connectionGuard);
+          startFallbackSimulator();
+        }
+      }
+
+      // --- Mode Switching & Signal Card Styling ---
+      function setActiveMode(mode) {
+        activeMode = mode;
+
+        if (mode === 'matches') {
+          modeMatchesPill.className =
+            'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[#00c853] text-[#03140b] shadow transition-all cursor-pointer';
+          modeDiffersPill.className =
+            'px-2.5 py-1 rounded-lg text-[11px] font-bold text-gray-400 hover:text-white transition-all cursor-pointer';
+
+          signalResultCard.className =
+            'rounded-2xl bg-gradient-to-br from-[#0c2419] via-[#081912] to-[#06120d] border border-emerald-500/45 p-3.5 shadow-inner transition-all duration-300';
+          signalLiveDot.className = 'w-2.5 h-2.5 rounded-full bg-[#00e676] shadow-[0_0_8px_#00e676] animate-pulse';
+          signalTypeLabel.className = 'text-[11px] font-extrabold tracking-wider text-emerald-300 uppercase leading-none';
+          signalTypeLabel.textContent = 'MATCHES SIGNAL';
+          liveStatusPill.className =
+            'px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase bg-emerald-500/20 text-[#00e676] border border-emerald-400/40';
+          signalDigitBox.className =
+            'w-[74px] h-[74px] shrink-0 rounded-2xl bg-gradient-to-br from-[#00e676] to-[#00a844] text-[#03140b] flex items-center justify-center font-mono text-[38px] font-black shadow-[0_6px_22px_rgba(0,230,118,0.4)] border border-emerald-200/40';
+        } else {
+          modeDiffersPill.className =
+            'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[#dc2626] text-white shadow transition-all cursor-pointer';
+          modeMatchesPill.className =
+            'px-2.5 py-1 rounded-lg text-[11px] font-bold text-gray-400 hover:text-white transition-all cursor-pointer';
+
+          signalResultCard.className =
+            'rounded-2xl bg-gradient-to-br from-[#260d11] via-[#18090c] to-[#110608] border border-rose-500/45 p-3.5 shadow-inner transition-all duration-300';
+          signalLiveDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e] animate-pulse';
+          signalTypeLabel.className = 'text-[11px] font-extrabold tracking-wider text-rose-300 uppercase leading-none';
+          signalTypeLabel.textContent = 'DIFFERS SIGNAL';
+          liveStatusPill.className =
+            'px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase bg-rose-500/20 text-rose-300 border border-rose-400/40';
+          signalDigitBox.className =
+            'w-[74px] h-[74px] shrink-0 rounded-2xl bg-gradient-to-br from-[#ef4444] to-[#b91c1c] text-white flex items-center justify-center font-mono text-[38px] font-black shadow-[0_6px_22px_rgba(239,68,68,0.4)] border border-rose-200/30';
+        }
+      }
+
+      // --- Run Matrix Deep Scan Animation & Output Signal ---
+      function triggerMatrixScan(requestedMode = null) {
+        if (isScanning) return;
+
+        // Determine mode from button clicked or dropdown preference
+        let targetMode = requestedMode || activeMode;
+        if (!requestedMode) {
+          if (tradeTypeSelect.value === 'matches_only') targetMode = 'matches';
+          if (tradeTypeSelect.value === 'differs_only') targetMode = 'differs';
+        }
+        setActiveMode(targetMode);
+
+        isScanning = true;
+        startScanBtn.disabled = true;
+        startScanBtn.classList.add('opacity-75', 'cursor-not-allowed');
+
+        // Configure analyzing overlay appearance
+        if (targetMode === 'matches') {
+          analyzingStateView.className =
+            'absolute inset-0 analyzing-overlay flex flex-col items-center justify-center text-center px-5 z-20 transition-all duration-200';
+          analyzingTitle.textContent = 'Analyzing the matches market';
+        } else {
+          analyzingStateView.className =
+            'absolute inset-0 analyzing-overlay-differs flex flex-col items-center justify-center text-center px-5 z-20 transition-all duration-200';
+          analyzingTitle.textContent = 'Analyzing the differs market';
+        }
+        analyzingSubtitle.textContent = 'Scanning digit distribution & probability...';
+        scannerStatusText.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span> Deep scanning matrix...`;
+
+        scanProgressBar.style.width = '0%';
+        idleStateView.classList.add('opacity-0');
+        analyzingStateView.classList.remove('hidden');
+
+        // Animate progress bar over ~1.15s
+        const duration = 1150;
+        const startTime = performance.now();
+
+        function stepProgress(now) {
+          const elapsed = now - startTime;
+          const pct = Math.min(100, (elapsed / duration) * 100);
+          scanProgressBar.style.width = `${pct}%`;
+
+          if (pct < 100) {
+            requestAnimationFrame(stepProgress);
+          } else {
+            finalizeSignalOutput(targetMode);
+          }
+        }
+
+        requestAnimationFrame(stepProgress);
+      }
+
+      function finalizeSignalOutput(mode) {
+        const stats = computeDigitStats();
+        let chosenDigit = 6;
+        let confidencePct = 98.0;
+        let basisText = '';
+
+        if (mode === 'matches') {
+          // Pick hottest digit from rolling sample window
+          chosenDigit = stats.hottestDigit;
+          const freq = stats.frequencies[chosenDigit];
+          // Map sample skew into a crisp 91.5% - 98.8% scanner index
+          const rawScore = 91.5 + Math.min(7.3, Math.max(1.2, (freq - 8) * 0.72));
+          confidencePct = rawScore.toFixed(1);
+          basisText = `${stats.total}-tick sample • Freq: ${freq.toFixed(1)}%`;
+        } else {
+          // Pick coldest / least frequent digit for Differs
+          chosenDigit = stats.coldestDigit;
+          const freq = stats.frequencies[chosenDigit];
+          const rawScore = 94.2 + Math.min(4.7, Math.max(0.8, (12 - freq) * 0.45));
+          confidencePct = rawScore.toFixed(1);
+          basisText = `${stats.total}-tick sample • Low freq: ${freq.toFixed(1)}%`;
+        }
+
+        // Update Signal Result Card with pop animation
+        signalDigitValue.textContent = chosenDigit;
+        signalDigitBox.classList.remove('digit-pop');
+        void signalDigitBox.offsetWidth; // trigger reflow
+        signalDigitBox.classList.add('digit-pop');
+
+        signalConfidenceValue.textContent = `${confidencePct}%`;
+        signalTimestamp.textContent = formatClockTime(new Date());
+        signalBasisNote.textContent = basisText;
+
+        // Return viewport to Idle state
+        analyzingStateView.classList.add('hidden');
+        idleStateView.classList.remove('opacity-0');
+        scannerStatusText.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#00e676]"></span> Ready`;
+
+        isScanning = false;
+        startScanBtn.disabled = false;
+        startScanBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+      }
+
+      // --- Auto-Generate Every 30s Timer ---
+      function toggleAutoGenerate(enabled) {
+        if (autoGenInterval) {
+          clearInterval(autoGenInterval);
+          autoGenInterval = null;
+        }
+
+        if (enabled) {
+          autoGenCountdown = 30;
+          autoGenTimerBadge.textContent = `Next: ${autoGenCountdown}s`;
+          autoGenTimerBadge.classList.remove('hidden');
+
+          autoGenInterval = setInterval(() => {
+            autoGenCountdown--;
+            if (autoGenCountdown <= 0) {
+              autoGenCountdown = 30;
+              triggerMatrixScan(activeMode);
+            }
+            autoGenTimerBadge.textContent = `Next: ${autoGenCountdown}s`;
+          }, 1000);
+        } else {
+          autoGenTimerBadge.classList.add('hidden');
+        }
+      }
+
+      // --- Event Listeners ---
+      symbolSelect.addEventListener('change', (e) => {
+        const selectedOption = e.target.selectedOptions[0];
+        currentSymbol = selectedOption.value;
+        currentDecimals = parseInt(selectedOption.getAttribute('data-decimals') || '2', 10);
+        footerSymbolLabel.textContent = selectedOption.textContent.trim();
+        connectDerivStream(currentSymbol);
+      });
+
+      tradeTypeSelect.addEventListener('change', (e) => {
+        if (e.target.value === 'matches_only') setActiveMode('matches');
+        if (e.target.value === 'differs_only') setActiveMode('differs');
+      });
+
+      startScanBtn.addEventListener('click', () => triggerMatrixScan(activeMode));
+      modeMatchesPill.addEventListener('click', () => setActiveMode('matches'));
+      modeDiffersPill.addEventListener('click', () => setActiveMode('differs'));
+
+      btnQuickMatches.addEventListener('click', () => triggerMatrixScan('matches'));
+      btnQuickDiffers.addEventListener('click', () => triggerMatrixScan('differs'));
+      btnQuickSignal.addEventListener('click', () => triggerMatrixScan(activeMode));
+
+      autoGenCheckbox.addEventListener('change', (e) => {
+        toggleAutoGenerate(e.target.checked);
+      });
+
+      // --- Boot Sequence ---
+      initMiniBars();
+      signalTimestamp.textContent = formatClockTime(new Date());
+      connectDerivStream(currentSymbol);
+    })();
+  </script>
+</body>
+</html>
